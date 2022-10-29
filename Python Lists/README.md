@@ -9,6 +9,3 @@ You can print by:
   print(fruits [0]) 
 
 Fun fact: Inside the square bracket, if you put -1 than the list will start counting from end of the list!
-
-
-
