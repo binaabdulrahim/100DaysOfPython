@@ -1,0 +1,1 @@
+int(f"The lowest score in the class is: {lowest_score}")
