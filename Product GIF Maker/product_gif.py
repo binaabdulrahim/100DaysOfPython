@@ -65,9 +65,13 @@ def cut_out_product(image, tolerance=40):
     rgb = image.convert("RGB")
     bg_color = rgb.getpixel((2, 2))
 
-    # White where a pixel looks like the background, black elsewhere
+    # White where a pixel looks like the background, black elsewhere.
+    # Use the biggest difference in any one channel: white/cream products differ
+    # from butter yellow mostly in blue, which a greyscale difference would hide.
     diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, bg_color))
-    looks_like_bg = diff.convert("L").point(lambda v: 255 if v < tolerance else 0)
+    r, g, b = diff.split()
+    biggest = ImageChops.lighter(ImageChops.lighter(r, g), b)
+    looks_like_bg = biggest.point(lambda v: 255 if v < tolerance else 0)
 
     # Flood fill from every corner so we only remove background that is
     # connected to the edge (keeps any yellow parts inside the product)
