@@ -15,7 +15,7 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
-from product_gif import make_animation
+from product_gif import SIZES, make_animation
 
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -43,7 +43,11 @@ def find_image(product, images):
     for name, path in by_slug.items():
         if name in target or target in name:
             return path
-    close = difflib.get_close_matches(target, by_slug, n=1, cutoff=0.6)
+    # Fuzzy match only among files from the same brand (first word), so similar
+    # product names from different brands don't get mixed up
+    brand = target.split("_")[0]
+    same_brand = [name for name in by_slug if name.split("_")[0] == brand]
+    close = difflib.get_close_matches(target, same_brand, n=1, cutoff=0.6)
     return by_slug[close[0]] if close else None
 
 
@@ -54,6 +58,8 @@ def main():
     parser.add_argument("output", help="folder to save GIFs into")
     parser.add_argument("--kind", choices=["auto", "joke", "riddle"], default="auto")
     parser.add_argument("--gif", action="store_true", help="make GIFs instead of MP4s")
+    parser.add_argument("--size", choices=list(SIZES) + ["all"], default="reels",
+                        help="reels = 9:16 TikTok/Reels (default), feed = 4:5 Instagram post, square, or all")
     args = parser.parse_args()
 
     images = [p for p in Path(args.images).iterdir() if p.suffix.lower() in IMAGE_TYPES]
@@ -61,14 +67,17 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     made, missing = 0, []
-    for day, product in read_log(args.log):
+    entries = read_log(args.log)
+    for n, (day, product) in enumerate(entries):
+        index = sum(1 for d, _ in entries[:n] if d == day)  # nth product that day -> its own joke
         image = find_image(product, images)
         if not image:
             missing.append(f"{day}  {product}")
             continue
-        output = out_dir / f"{day}_{slug(product)}{'.gif' if args.gif else '.mp4'}"
-        make_animation(image, output, kind=args.kind, day=day)
-        made += 1
+        for size in (SIZES if args.size == "all" else [args.size]):
+            output = out_dir / f"{day}_{slug(product)}_{size}{'.gif' if args.gif else '.mp4'}"
+            make_animation(image, output, kind=args.kind, day=day, size=size, index=index)
+            made += 1
         print(f"✓ {day}  {product}  ({image.name})")
 
     print(f"\nMade {made} file(s) in {out_dir}/")

@@ -25,15 +25,25 @@ from jokes import JOKES, RIDDLES
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
+# Output sizes for social apps: (width, height, top, bottom, right safe zones as fractions).
+# The safe zones keep the bubble and product clear of each app's buttons and captions
+# (TikTok / Reels put the like-comment-share column on the right, captions at the bottom).
+SIZES = {
+    "reels": (1080, 1920, 0.12, 0.22, 0.13),   # TikTok + Instagram Reels / Stories (9:16)
+    "feed": (1080, 1350, 0.04, 0.04, 0.0),     # Instagram feed post (4:5)
+    "square": (1080, 1080, 0.04, 0.04, 0.0),   # 1:1
+}
+
 
 # ---------- picking today's joke / riddle ----------
 
-def pick_of_the_day(kind, day):
-    """Same date -> same pick, so everyone sees the same joke that day."""
+def pick_of_the_day(kind, day, index=0):
+    """Same date -> same picks. `index` gives each product posted that day a different one."""
     if kind == "auto":
         kind = "joke" if day.toordinal() % 2 == 0 else "riddle"
-    pool = JOKES if kind == "joke" else RIDDLES
-    question, answer = random.Random(day.toordinal()).choice(pool)
+    pool = list(JOKES if kind == "joke" else RIDDLES)
+    random.Random(day.toordinal()).shuffle(pool)
+    question, answer = pool[index % len(pool)]
     return kind, question, answer
 
 
@@ -78,21 +88,26 @@ def wrap_text(text, font, max_width, draw):
     return lines
 
 
-def draw_bubble(canvas, title, body, tail_x, tail_y, accent):
+def bubble_layout(canvas, body, box_top, safe_right=0.0):
+    """Fonts, wrapped lines and the bubble's bottom edge for this text."""
     draw = ImageDraw.Draw(canvas)
     W = canvas.width
     pad = int(W * 0.04)
-    box_left, box_right = int(W * 0.08), int(W * 0.92)
-    box_top = int(W * 0.06)
-
+    box_left = int(W * (0.06 if safe_right else 0.08))
+    box_right = int(W * (1 - safe_right - 0.02)) if safe_right else int(W * 0.92)
     title_font = ImageFont.truetype(FONT_BOLD, int(W * 0.035))
     body_font = ImageFont.truetype(FONT_REGULAR, int(W * 0.042))
     lines = wrap_text(body, body_font, box_right - box_left - 2 * pad, draw)
     line_h = int(body_font.size * 1.3)
-
     box_bottom = box_top + pad + title_font.size + int(pad * 0.6) + line_h * len(lines) + pad
+    return draw, pad, box_left, box_right, title_font, body_font, lines, line_h, box_bottom
+
+
+def draw_bubble(canvas, title, body, tail_x, tail_y, accent, box_top, safe_right=0.0):
+    draw, pad, box_left, box_right, title_font, body_font, lines, line_h, box_bottom = \
+        bubble_layout(canvas, body, box_top, safe_right)
     outline = (40, 40, 40)
-    stroke = max(3, W // 180)
+    stroke = max(3, canvas.width // 180)
 
     # Tail: a triangle from the bubble's bottom edge down toward the product
     base_x = min(max(tail_x, box_left + 80), box_right - 80)
@@ -116,25 +131,44 @@ def draw_bubble(canvas, title, body, tail_x, tail_y, accent):
 
 # ---------- building the animation ----------
 
-def make_frames(product_path, kind="auto", text=None, day=None, width=1080, frames=96, sway=0.08, tilt=5):
+def bubble_texts(kind, question, answer):
+    """The bubble shows the question first, then the punchline / answer."""
+    if not answer:
+        return question, question
+    return question, (f"{question}  →  {answer}" if kind == "joke" else f"Answer: {answer}")
+
+
+def make_frames(product_path, kind="auto", text=None, day=None, size="reels", width=1080, frames=96,
+                sway=0.08, tilt=5, index=0):
     """Return one loop of RGB frames (two side-to-side swings) plus the bubble text."""
     day = day or date.today()
     source = Image.open(product_path)
     product, bg_color = cut_out_product(source)
 
-    # Output canvas keeps the source's aspect ratio (even sizes for video encoders)
-    width -= width % 2
-    height = int(width * source.height / source.width)
-    height -= height % 2
-    scale = (height * 0.62) / product.height
-    product = product.resize((int(product.width * scale), int(product.height * scale)), Image.LANCZOS)
-
     if text:
         kind, question, answer = "custom", text, None
         title = "PSST..."
     else:
-        kind, question, answer = pick_of_the_day(kind, day)
+        kind, question, answer = pick_of_the_day(kind, day, index)
         title = f"{kind.upper()} OF THE DAY  ·  {day:%b %d}"
+    first_text, second_text = bubble_texts(kind, question, answer)
+
+    # Canvas size from the preset, scaled to `width` (even sizes for video encoders)
+    base_w, base_h, safe_top, safe_bottom, safe_right = SIZES[size]
+    width -= width % 2
+    height = int(width * base_h / base_w)
+    height -= height % 2
+    box_top = int(height * safe_top)
+    floor_y = height - int(height * safe_bottom)
+
+    # The product fits between the tallest bubble and the bottom safe zone
+    blank = Image.new("RGB", (width, height))
+    bubble_bottom = max(bubble_layout(blank, t, box_top, safe_right)[-1] for t in (first_text, second_text))
+    room = floor_y - bubble_bottom - int(height * 0.06)
+    usable_w = width * (1 - safe_right)
+    center_x = int(usable_w / 2)
+    scale = min(room / product.height, (usable_w * 0.72) / product.width)
+    product = product.resize((int(product.width * scale), int(product.height * scale)), Image.LANCZOS)
 
     accent = (200, 60, 110)
     frame_list = []
@@ -147,16 +181,12 @@ def make_frames(product_path, kind="auto", text=None, day=None, width=1080, fram
 
         canvas = Image.new("RGB", (width, height), bg_color)
         rotated = product.rotate(angle, resample=Image.BICUBIC, expand=True)
-        x = (width - rotated.width) // 2 + offset_x
-        y = height - rotated.height - int(height * 0.04)
+        x = center_x - rotated.width // 2 + offset_x
+        y = floor_y - rotated.height
         canvas.paste(rotated, (x, y), rotated)
 
-        # Show the question first, then reveal the punchline / answer
-        if answer and t >= 0.5:
-            body = f"{question}  →  {answer}" if kind == "joke" else f"Answer: {answer}"
-        else:
-            body = question
-        draw_bubble(canvas, title, body, tail_x=width // 2 + offset_x,
+        body = second_text if t >= 0.5 else first_text
+        draw_bubble(canvas, title, body, box_top=box_top, safe_right=safe_right, tail_x=center_x + offset_x,
                     tail_y=y + int(rotated.height * 0.05), accent=accent)
         frame_list.append(canvas)
     return frame_list, question, answer
@@ -183,11 +213,12 @@ def save_mp4(frame_list, output_path, fps=30, loops=3):
                 writer.append_data(np.asarray(frame))
 
 
-def make_animation(product_path, output_path, kind="auto", text=None, day=None, width=1080, loops=3):
+def make_animation(product_path, output_path, kind="auto", text=None, day=None, size="reels", width=1080,
+                   loops=3, index=0):
     """Save an .mp4 (default) or .gif depending on the output file's extension."""
     is_gif = str(output_path).lower().endswith(".gif")
-    frame_list, question, answer = make_frames(product_path, kind=kind, text=text, day=day,
-                                               width=min(width, 600) if is_gif else width)
+    frame_list, question, answer = make_frames(product_path, kind=kind, text=text, day=day, size=size,
+                                               width=min(width, 600) if is_gif else width, index=index)
     if is_gif:
         save_gif(frame_list, output_path)
     else:
@@ -204,6 +235,9 @@ def main():
                         help="auto alternates jokes and riddles by day")
     parser.add_argument("--text", help="use your own bubble text instead of the joke of the day")
     parser.add_argument("--date", type=date.fromisoformat, help="pick the joke for this date (YYYY-MM-DD)")
+    parser.add_argument("--size", choices=SIZES, default="reels",
+                        help="reels = 9:16 for TikTok + Instagram Reels/Stories (default), "
+                             "feed = 4:5 Instagram post, square = 1:1")
     parser.add_argument("--width", type=int, default=1080, help="width in pixels (GIFs max out at 600)")
     parser.add_argument("--loops", type=int, default=3, help="how many times the MP4 repeats the ~3s loop")
     args = parser.parse_args()
@@ -212,7 +246,7 @@ def main():
     ext = ".gif" if args.gif else ".mp4"
     output = args.output or str(Path(args.image).with_name(f"{Path(args.image).stem}_{day}{ext}"))
     question, answer = make_animation(args.image, output, kind=args.kind, text=args.text,
-                                      day=day, width=args.width, loops=args.loops)
+                                      day=day, size=args.size, width=args.width, loops=args.loops)
     print(f"Bubble: {question}" + (f"  ->  {answer}" if answer else ""))
     print(f"Saved to {output}")
 

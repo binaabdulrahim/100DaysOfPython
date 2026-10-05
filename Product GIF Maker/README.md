@@ -7,8 +7,15 @@ side to side while a speech bubble shows the **joke of the day** or **riddle of 
 
 Example video: [`products/bisou_balm_2026-10-05.mp4`](products/bisou_balm_2026-10-05.mp4)
 
-**Video format:** H.264 MP4, 1080 px wide (1080×1350 for a 4:5 picture), 30 fps, about 10 seconds (the 3.2 s loop plays 3 times).
-That works for Instagram posts and Reels, TikTok, Facebook, X and Pinterest.
+**Video format:** H.264 MP4, 30 fps, about 10 seconds (the 3.2 s loop plays 3 times).
+
+| `--size` | Dimensions | Use it for |
+|---|---|---|
+| `reels` (default) | 1080×1920 (9:16) | **TikTok**, Instagram Reels and Stories |
+| `feed` | 1080×1350 (4:5) | Instagram feed post |
+| `square` | 1080×1080 (1:1) | Square posts |
+
+The 9:16 layout keeps the bubble and product inside the safe area. That means clear of the top bar, the caption at the bottom and the like/comment/share buttons on the right.
 
 ## How it works
 1. **Cut out the product.** The script reads the background colour from the top-left corner and flood-fills from the image corners to remove it. Only background touching the edges is removed, so colours inside the product stay.
@@ -18,7 +25,8 @@ That works for Instagram posts and Reels, TikTok, Facebook, X and Pinterest.
 ## Usage
 ```bash
 pip install -r requirements.txt
-python product_gif.py products/bisou_balm.png                  # MP4, joke or riddle by date
+python product_gif.py products/bisou_balm.png                  # 9:16 MP4 for TikTok / Reels
+python product_gif.py products/bisou_balm.png --size feed      # 4:5 Instagram post
 python product_gif.py products/bisou_balm.png --gif            # GIF instead
 python product_gif.py products/bisou_balm.png --kind riddle
 python product_gif.py products/bisou_balm.png --text "Kiss dry lips goodbye!"
@@ -32,6 +40,7 @@ Put one picture per product in `products/` and name each file after the product.
 Close names work too, e.g. `rhode_glazing_mist.png` or `Rhode Glazing Mist.jpg`.
 Then run:
 ```bash
-python batch_gifs.py beauty_alert_log.txt products/ videos/          # add --gif for GIFs
+python batch_gifs.py beauty_alert_log.txt products/ videos/              # 9:16 for TikTok / Reels
+python batch_gifs.py beauty_alert_log.txt products/ videos/ --size all   # 9:16 + 4:5 + 1:1
 ```
-Each video uses its log date for the joke or riddle of the day. The script lists any products it couldn't find a picture for.
+Each video uses its log date for the joke or riddle of the day. Products posted on the same day each get a different one. The script lists any products it couldn't find a picture for.
