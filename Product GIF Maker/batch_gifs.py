@@ -1,11 +1,11 @@
-"""Make a GIF for every product in the Beauty Alert Log.
+"""Make a postable MP4 (or GIF) for every product in the Beauty Alert Log.
 
 Each log line looks like:   2026-10-05 | topic | Violette_FR Bisou Balm in Chocolat
 The script finds the matching picture in the images folder (by name), and uses
 the log date to pick that day's joke / riddle.
 
 Usage:
-    python batch_gifs.py beauty_alert_log.txt products/ gifs/
+    python batch_gifs.py beauty_alert_log.txt products/ videos/
 """
 
 import argparse
@@ -15,7 +15,7 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
-from product_gif import make_gif
+from product_gif import make_animation
 
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -53,6 +53,7 @@ def main():
     parser.add_argument("images", help="folder with one picture per product")
     parser.add_argument("output", help="folder to save GIFs into")
     parser.add_argument("--kind", choices=["auto", "joke", "riddle"], default="auto")
+    parser.add_argument("--gif", action="store_true", help="make GIFs instead of MP4s")
     args = parser.parse_args()
 
     images = [p for p in Path(args.images).iterdir() if p.suffix.lower() in IMAGE_TYPES]
@@ -65,12 +66,12 @@ def main():
         if not image:
             missing.append(f"{day}  {product}")
             continue
-        output = out_dir / f"{day}_{slug(product)}.gif"
-        make_gif(image, output, kind=args.kind, day=day)
+        output = out_dir / f"{day}_{slug(product)}{'.gif' if args.gif else '.mp4'}"
+        make_animation(image, output, kind=args.kind, day=day)
         made += 1
         print(f"✓ {day}  {product}  ({image.name})")
 
-    print(f"\nMade {made} GIF(s) in {out_dir}/")
+    print(f"\nMade {made} file(s) in {out_dir}/")
     if missing:
         print(f"No picture found for {len(missing)} product(s):")
         print("\n".join(f"  - {m}" for m in missing))

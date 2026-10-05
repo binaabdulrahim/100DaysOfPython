@@ -1,11 +1,12 @@
 """Product GIF Maker
 
 Takes a product photo, cuts the product off its background, and turns it into
-an animated GIF where the product sways side to side while a speech bubble
+an MP4 video (or GIF) where the product sways side to side while a speech bubble
 shows the joke (or riddle) of the day.
 
 Usage:
-    python product_gif.py products/bisou_balm.png
+    python product_gif.py products/bisou_balm.png          # MP4 (postable)
+    python product_gif.py products/bisou_balm.png --gif    # GIF
     python product_gif.py products/bisou_balm.png --kind riddle
     python product_gif.py products/bisou_balm.png --text "Kiss boring lips goodbye!"
 """
@@ -16,6 +17,7 @@ import random
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from jokes import JOKES, RIDDLES
@@ -112,16 +114,18 @@ def draw_bubble(canvas, title, body, tail_x, tail_y, accent):
     return box_bottom
 
 
-# ---------- building the GIF ----------
+# ---------- building the animation ----------
 
-def make_gif(product_path, output_path, kind="auto", text=None, day=None,
-             width=600, frames=48, frame_ms=70, sway=0.08, tilt=5):
+def make_frames(product_path, kind="auto", text=None, day=None, width=1080, frames=96, sway=0.08, tilt=5):
+    """Return one loop of RGB frames (two side-to-side swings) plus the bubble text."""
     day = day or date.today()
     source = Image.open(product_path)
     product, bg_color = cut_out_product(source)
 
-    # Output canvas keeps the source's aspect ratio
+    # Output canvas keeps the source's aspect ratio (even sizes for video encoders)
+    width -= width % 2
     height = int(width * source.height / source.width)
+    height -= height % 2
     scale = (height * 0.62) / product.height
     product = product.resize((int(product.width * scale), int(product.height * scale)), Image.LANCZOS)
 
@@ -147,7 +151,7 @@ def make_gif(product_path, output_path, kind="auto", text=None, day=None,
         y = height - rotated.height - int(height * 0.04)
         canvas.paste(rotated, (x, y), rotated)
 
-        # Riddles show the question first, then reveal the answer
+        # Show the question first, then reveal the punchline / answer
         if answer and t >= 0.5:
             body = f"{question}  →  {answer}" if kind == "joke" else f"Answer: {answer}"
         else:
@@ -155,32 +159,62 @@ def make_gif(product_path, output_path, kind="auto", text=None, day=None,
         draw_bubble(canvas, title, body, tail_x=width // 2 + offset_x,
                     tail_y=y + int(rotated.height * 0.05), accent=accent)
         frame_list.append(canvas)
+    return frame_list, question, answer
 
-    # One shared palette for every frame keeps the file small and flicker-free
+
+def save_gif(frame_list, output_path, frame_ms=70):
+    # GIFs get every 2nd frame and one shared palette to keep the file small
+    frame_list = frame_list[::2]
     palette = frame_list[0].quantize(colors=128, method=Image.MEDIANCUT)
     frame_list = [f.quantize(palette=palette, dither=Image.Dither.NONE) for f in frame_list]
-
     frame_list[0].save(output_path, save_all=True, append_images=frame_list[1:],
                        duration=frame_ms, loop=0, optimize=True)
+
+
+def save_mp4(frame_list, output_path, fps=30, loops=3):
+    """H.264 / yuv420p MP4, the format Instagram, TikTok, etc. accept."""
+    import imageio.v2 as imageio  # only needed for video
+
+    with imageio.get_writer(output_path, fps=fps, codec="libx264", quality=8,
+                            pixelformat="yuv420p", macro_block_size=2,
+                            ffmpeg_params=["-movflags", "+faststart"]) as writer:
+        for _ in range(loops):
+            for frame in frame_list:
+                writer.append_data(np.asarray(frame))
+
+
+def make_animation(product_path, output_path, kind="auto", text=None, day=None, width=1080, loops=3):
+    """Save an .mp4 (default) or .gif depending on the output file's extension."""
+    is_gif = str(output_path).lower().endswith(".gif")
+    frame_list, question, answer = make_frames(product_path, kind=kind, text=text, day=day,
+                                               width=min(width, 600) if is_gif else width)
+    if is_gif:
+        save_gif(frame_list, output_path)
+    else:
+        save_mp4(frame_list, output_path, loops=loops)
     return question, answer
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Turn a product photo into a swaying GIF with a joke bubble.")
+    parser = argparse.ArgumentParser(description="Turn a product photo into a swaying video/GIF with a joke bubble.")
     parser.add_argument("image", help="path to the product photo")
-    parser.add_argument("-o", "--output", help="output GIF path (default: <image>_<date>.gif)")
+    parser.add_argument("-o", "--output", help="output path, .mp4 or .gif (default: <image>_<date>.mp4)")
+    parser.add_argument("--gif", action="store_true", help="make a GIF instead of an MP4")
     parser.add_argument("--kind", choices=["auto", "joke", "riddle"], default="auto",
                         help="auto alternates jokes and riddles by day")
     parser.add_argument("--text", help="use your own bubble text instead of the joke of the day")
     parser.add_argument("--date", type=date.fromisoformat, help="pick the joke for this date (YYYY-MM-DD)")
-    parser.add_argument("--width", type=int, default=600, help="GIF width in pixels")
+    parser.add_argument("--width", type=int, default=1080, help="width in pixels (GIFs max out at 600)")
+    parser.add_argument("--loops", type=int, default=3, help="how many times the MP4 repeats the ~3s loop")
     args = parser.parse_args()
 
     day = args.date or date.today()
-    output = args.output or str(Path(args.image).with_name(f"{Path(args.image).stem}_{day}.gif"))
-    question, answer = make_gif(args.image, output, kind=args.kind, text=args.text, day=day, width=args.width)
+    ext = ".gif" if args.gif else ".mp4"
+    output = args.output or str(Path(args.image).with_name(f"{Path(args.image).stem}_{day}{ext}"))
+    question, answer = make_animation(args.image, output, kind=args.kind, text=args.text,
+                                      day=day, width=args.width, loops=args.loops)
     print(f"Bubble: {question}" + (f"  ->  {answer}" if answer else ""))
-    print(f"Saved GIF to {output}")
+    print(f"Saved to {output}")
 
 
 if __name__ == "__main__":
