@@ -19,3 +19,13 @@ python product_gif.py products/bisou_balm.png --text "Kiss dry lips goodbye!"
 python product_gif.py products/bisou_balm.png --date 2026-12-25 -o xmas.gif
 ```
 Works best with a product on a plain, solid-colour background.
+
+## Batch: every product in the Beauty Alert Log
+`beauty_alert_log.txt` holds the week's products, copied from the Google Doc.
+Put one picture per product in `products/` and name each file after the product.
+Close names work too, e.g. `rhode_glazing_mist.png` or `Rhode Glazing Mist.jpg`.
+Then run:
+```bash
+python batch_gifs.py beauty_alert_log.txt products/ gifs/
+```
+Each GIF uses its log date for the joke or riddle of the day. The script lists any products it couldn't find a picture for.
