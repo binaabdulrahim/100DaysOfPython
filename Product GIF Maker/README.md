@@ -34,13 +34,14 @@ python product_gif.py products/bisou_balm.png --date 2026-12-25 -o xmas.mp4
 ```
 Works best with a product on a plain, solid-colour background.
 
-## Batch: every product in the Beauty Alert Log
-`beauty_alert_log.txt` holds the week's products, copied from the Google Doc.
-Put one picture per product in `products/` and name each file after the product.
-Close names work too, e.g. `rhode_glazing_mist.png` or `Rhode Glazing Mist.jpg`.
-Then run:
+## Batch: a video for every product picture
+Put the pictures in one folder. They can be named like the scheduled posts, e.g.
+`2026-10-05_0700_violette-fr-bisou-balm-in-chocolat.jpg`. Then run:
 ```bash
-python batch_gifs.py beauty_alert_log.txt products/ videos/              # 9:16 for TikTok / Reels
-python batch_gifs.py beauty_alert_log.txt products/ videos/ --size all   # 9:16 + 4:5 + 1:1
+python batch_gifs.py sketches/ videos/                 # 9:16 MP4s for TikTok / Reels
+python batch_gifs.py sketches/ videos/ --size all      # 9:16 + 4:5 + 1:1
+python batch_gifs.py sketches/ videos/ --jobs 4        # render 4 at a time
 ```
-Each video uses its log date for the joke or riddle of the day. Products posted on the same day each get a different one. The script lists any products it couldn't find a picture for.
+- Videos are made in date/time order and keep the picture's file name.
+- Posts alternate between a joke and a riddle. No two posts share one until the lists in `jokes.py` run out (44 of each, so 88 posts).
+- `--log beauty_alert_log.txt` takes the product list from a log file instead, and matches each product to a picture by name.

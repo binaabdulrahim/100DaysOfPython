@@ -37,6 +37,17 @@ SIZES = {
 
 # ---------- picking today's joke / riddle ----------
 
+def pick_for_post(n, kind="auto"):
+    """Post number n of a batch: alternate joke / riddle, never repeating until a list runs out."""
+    if kind == "auto":
+        kind = "joke" if n % 2 == 0 else "riddle"
+        n //= 2
+    pool = list(JOKES if kind == "joke" else RIDDLES)
+    random.Random(2026).shuffle(pool)
+    question, answer = pool[n % len(pool)]
+    return kind, question, answer
+
+
 def pick_of_the_day(kind, day, index=0):
     """Same date -> same picks. `index` gives each product posted that day a different one."""
     if kind == "auto":
@@ -139,7 +150,7 @@ def bubble_texts(kind, question, answer):
 
 
 def make_frames(product_path, kind="auto", text=None, day=None, size="reels", width=1080, frames=96,
-                sway=0.08, tilt=5, index=0):
+                sway=0.08, tilt=5, index=0, pick=None):
     """Return one loop of RGB frames (two side-to-side swings) plus the bubble text."""
     day = day or date.today()
     source = Image.open(product_path)
@@ -149,8 +160,8 @@ def make_frames(product_path, kind="auto", text=None, day=None, size="reels", wi
         kind, question, answer = "custom", text, None
         title = "PSST..."
     else:
-        kind, question, answer = pick_of_the_day(kind, day, index)
-        title = f"{kind.upper()} OF THE DAY  ·  {day:%b %d}"
+        kind, question, answer = pick or pick_of_the_day(kind, day, index)
+        title = f"{kind.upper()} OF THE DAY"
     first_text, second_text = bubble_texts(kind, question, answer)
 
     # Canvas size from the preset, scaled to `width` (even sizes for video encoders)
@@ -214,11 +225,11 @@ def save_mp4(frame_list, output_path, fps=30, loops=3):
 
 
 def make_animation(product_path, output_path, kind="auto", text=None, day=None, size="reels", width=1080,
-                   loops=3, index=0):
+                   loops=3, index=0, pick=None):
     """Save an .mp4 (default) or .gif depending on the output file's extension."""
     is_gif = str(output_path).lower().endswith(".gif")
     frame_list, question, answer = make_frames(product_path, kind=kind, text=text, day=day, size=size,
-                                               width=min(width, 600) if is_gif else width, index=index)
+                                               width=min(width, 600) if is_gif else width, index=index, pick=pick)
     if is_gif:
         save_gif(frame_list, output_path)
     else:
