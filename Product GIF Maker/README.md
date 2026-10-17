@@ -43,5 +43,6 @@ python batch_gifs.py sketches/ videos/ --size all      # 9:16 + 4:5 + 1:1
 python batch_gifs.py sketches/ videos/ --jobs 4        # render 4 at a time
 ```
 - Videos are made in date/time order and keep the picture's file name.
-- Posts alternate between a joke and a riddle. No two posts share one until the lists in `jokes.py` run out (44 of each, so 88 posts).
+- Posts alternate between a joke and a riddle. Each post is numbered by its schedule slot: 4 a day, counted from `--first-day` (default 2026-10-05). The same slot always gets the same joke, and a new batch of pictures carries on from where the last one stopped. No joke repeats until `jokes.py` runs out (64 of each, so 128 posts, up to Nov 5).
+- Add new jokes and riddles to the **end** of each list in `jokes.py`. That way posts you've already made keep their jokes.
 - `--log beauty_alert_log.txt` takes the product list from a log file instead, and matches each product to a picture by name.

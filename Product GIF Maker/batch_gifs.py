@@ -85,6 +85,9 @@ def main():
     parser.add_argument("--size", choices=list(SIZES) + ["all"], default="reels",
                         help="reels = 9:16 TikTok/Reels (default), feed = 4:5 Instagram post, square, or all")
     parser.add_argument("--jobs", type=int, default=3, help="videos to render at the same time")
+    parser.add_argument("--first-day", default="2026-10-05",
+                        help="first day of the posting schedule; jokes are numbered from here")
+    parser.add_argument("--per-day", type=int, default=4, help="posts per day in the schedule")
     args = parser.parse_args()
 
     images = [p for p in Path(args.images).iterdir() if p.suffix.lower() in IMAGE_TYPES]
@@ -105,8 +108,14 @@ def main():
 
     sizes = list(SIZES) if args.size == "all" else [args.size]
     ext = ".gif" if args.gif else ".mp4"
+    # Number each post by its schedule slot (4 a day from --first-day), so the same
+    # slot always gets the same joke and later batches carry on without repeats
+    first_day = date.fromisoformat(args.first_day)
+    slot_in_day = {}
     jobs = []
-    for n, (day, label, image) in enumerate(posts):
+    for i, (day, label, image) in enumerate(posts):
+        slot_in_day[day] = slot_in_day.get(day, -1) + 1
+        n = (day - first_day).days * args.per_day + slot_in_day[day] if args.log is None else i
         pick = pick_for_post(n, args.kind)
         for size in sizes:
             name = f"{label}{'_' + size if len(sizes) > 1 else ''}{ext}"

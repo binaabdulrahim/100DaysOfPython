@@ -37,13 +37,20 @@ SIZES = {
 
 # ---------- picking today's joke / riddle ----------
 
+FIRST_BATCH = 44
+
+
 def pick_for_post(n, kind="auto"):
     """Post number n of a batch: alternate joke / riddle, never repeating until a list runs out."""
     if kind == "auto":
         kind = "joke" if n % 2 == 0 else "riddle"
         n //= 2
     pool = list(JOKES if kind == "joke" else RIDDLES)
-    random.Random(2026).shuffle(pool)
+    # The first 44 of each list were shuffled for the first posts; anything added
+    # later goes after them, so posts already made keep the same joke.
+    first = pool[:FIRST_BATCH]
+    random.Random(2026).shuffle(first)
+    pool = first + pool[FIRST_BATCH:]
     question, answer = pool[n % len(pool)]
     return kind, question, answer
 
