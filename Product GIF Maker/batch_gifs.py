@@ -2,8 +2,8 @@
 
 Pictures named like the scheduled posts, e.g.
     2026-10-05_0700_violette-fr-bisou-balm-in-chocolat.jpg
-are put in date/time order. Posts alternate joke / riddle, and no two posts share
-a joke or riddle until the lists in jokes.py run out.
+are put in date/time order. Each product gets a joke or riddle written for its kind
+of product (themed_jokes.py), alternating joke / riddle, with no repeats in a batch.
 
 Usage:
     python batch_gifs.py sketches/ videos/
@@ -21,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import date
 from pathlib import Path
 
-from product_gif import SIZES, make_animation, pick_for_post
+from product_gif import SIZES, ThemedPicker, make_animation
 
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 SCHEDULED_NAME = re.compile(r"(\d{4}-\d{2}-\d{2})_(\d{4})_(.+)")
@@ -85,9 +85,6 @@ def main():
     parser.add_argument("--size", choices=list(SIZES) + ["all"], default="reels",
                         help="reels = 9:16 TikTok/Reels (default), feed = 4:5 Instagram post, square, or all")
     parser.add_argument("--jobs", type=int, default=3, help="videos to render at the same time")
-    parser.add_argument("--first-day", default="2026-10-05",
-                        help="first day of the posting schedule; jokes are numbered from here")
-    parser.add_argument("--per-day", type=int, default=4, help="posts per day in the schedule")
     args = parser.parse_args()
 
     images = [p for p in Path(args.images).iterdir() if p.suffix.lower() in IMAGE_TYPES]
@@ -108,15 +105,12 @@ def main():
 
     sizes = list(SIZES) if args.size == "all" else [args.size]
     ext = ".gif" if args.gif else ".mp4"
-    # Number each post by its schedule slot (4 a day from --first-day), so the same
-    # slot always gets the same joke and later batches carry on without repeats
-    first_day = date.fromisoformat(args.first_day)
-    slot_in_day = {}
+    # Each product gets a joke / riddle written for its kind of product (perfume,
+    # mascara, shampoo...), and none repeats within the batch
+    picker = ThemedPicker()
     jobs = []
-    for i, (day, label, image) in enumerate(posts):
-        slot_in_day[day] = slot_in_day.get(day, -1) + 1
-        n = (day - first_day).days * args.per_day + slot_in_day[day] if args.log is None else i
-        pick = pick_for_post(n, args.kind)
+    for day, label, image in posts:
+        pick = picker.pick(label, args.kind)
         for size in sizes:
             name = f"{label}{'_' + size if len(sizes) > 1 else ''}{ext}"
             jobs.append((image, out_dir / name, args.kind, day, size, pick))

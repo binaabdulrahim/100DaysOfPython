@@ -21,6 +21,7 @@ import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from jokes import JOKES, RIDDLES
+from themed_jokes import CODES, PARENT, RULES, THEMED
 
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -37,22 +38,56 @@ SIZES = {
 
 # ---------- picking today's joke / riddle ----------
 
-FIRST_BATCH = 44
+def product_type(name):
+    """Kind of product from a file name like '2026-10-17_1900_frg-dorsay-vanilla-affair'."""
+    name = name.lower().replace("_", "-").replace(" ", "-")
+    product = name.split("-", 4)[-1] if name[:4].isdigit() else name  # drop date/time
+    code = product.split("-")[0]
+    words = product.split("-")
+    if "lipstick" in words:
+        return "lipstick"
+    if "lip" in words or "lips" in words:
+        return "lips"  # lip balms count as lips even in skincare
+    categories = [CODES[code]] if code in CODES else list(RULES)
+    for category in categories:
+        for kind, words in RULES.get(category, []):
+            if any(word in product for word in words):
+                return kind
+    return CODES.get(code, "general")
 
 
-def pick_for_post(n, kind="auto"):
-    """Post number n of a batch: alternate joke / riddle, never repeating until a list runs out."""
-    if kind == "auto":
-        kind = "joke" if n % 2 == 0 else "riddle"
-        n //= 2
-    pool = list(JOKES if kind == "joke" else RIDDLES)
-    # The first 44 of each list were shuffled for the first posts; anything added
-    # later goes after them, so posts already made keep the same joke.
-    first = pool[:FIRST_BATCH]
-    random.Random(2026).shuffle(first)
-    pool = first + pool[FIRST_BATCH:]
-    question, answer = pool[n % len(pool)]
-    return kind, question, answer
+class ThemedPicker:
+    """Hands out jokes / riddles that match each product, never repeating one."""
+
+    def __init__(self, seed=2026):
+        self.used = set()
+        self.count = {}
+        self.seed = seed
+
+    def _pool(self, kind, wanted):
+        if kind == "general":
+            items = list(JOKES if wanted == "jokes" else RIDDLES)
+        else:
+            items = list(THEMED.get(kind, {}).get(wanted, []))
+        random.Random(f"{self.seed}-{kind}-{wanted}").shuffle(items)
+        return items
+
+    def pick(self, name, prefer="auto"):
+        kind = product_type(name)
+        # Alternate joke / riddle for each product of the same type (unless one is asked for)
+        n = self.count.get(kind, 0)
+        self.count[kind] = n + 1
+        first = {"joke": "jokes", "riddle": "riddles"}.get(prefer) or ("jokes" if n % 2 == 0 else "riddles")
+        order = [first, "riddles" if first == "jokes" else "jokes"]
+        for source in (kind, PARENT.get(kind), "general"):
+            if not source:
+                continue
+            for wanted in order:
+                for question, answer in self._pool(source, wanted):
+                    if question not in self.used:
+                        self.used.add(question)
+                        return ("joke" if wanted == "jokes" else "riddle"), question, answer
+        raise ValueError("Ran out of jokes and riddles")
 
 
 def pick_of_the_day(kind, day, index=0):

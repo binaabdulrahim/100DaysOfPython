@@ -43,6 +43,6 @@ python batch_gifs.py sketches/ videos/ --size all      # 9:16 + 4:5 + 1:1
 python batch_gifs.py sketches/ videos/ --jobs 4        # render 4 at a time
 ```
 - Videos are made in date/time order and keep the picture's file name.
-- Posts alternate between a joke and a riddle. Each post is numbered by its schedule slot: 4 a day, counted from `--first-day` (default 2026-10-05). The same slot always gets the same joke, and a new batch of pictures carries on from where the last one stopped. No joke repeats until `jokes.py` runs out (64 of each, so 128 posts, up to Nov 5).
-- Add new jokes and riddles to the **end** of each list in `jokes.py`. That way posts you've already made keep their jokes.
+- **Jokes match the product.** The file name tells the script what kind of product it is (perfume, nail polish, mascara, lip, blush, powder, shampoo, hair oil, hair dryer, serum, moisturiser…). It then picks a joke or riddle written for that kind from `themed_jokes.py`, so a perfume never gets a concealer riddle. Category codes in the name (`frg` fragrance, `nai` nails, `mua`/`mub` makeup, `ska`/`skb` skincare, `hra`/`hrb` hair) help it sort products.
+- Products of the same kind alternate between a joke and a riddle, and nothing repeats within a batch. If a kind runs out, it falls back to its category (makeup / skincare / hair), then to the general lists in `jokes.py`.
 - `--log beauty_alert_log.txt` takes the product list from a log file instead, and matches each product to a picture by name.
